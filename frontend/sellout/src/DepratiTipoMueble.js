@@ -50,27 +50,26 @@ const DepratiTipoMueble = () => {
 
   // Función para cargar los tipos de mueble desde la API
   const loadTipoMuebles = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch("/api/deprati/tipo-mueble");
-      if (!response.ok) throw new Error(`Error al cargar tipos de mueble: ${response.statusText}`);
+     setLoading(true);
+      setError("");
+      try {
+        const response = await fetch("/api/deprati/tipo-mueble?codCliente=MZCL-000009");
+        if (!response.ok) throw new Error(`Error al cargar tipos de mueble: ${response.statusText}`);
 
-      const data = await response.json();
-      setTipoMuebles(data);
-      setFilteredTipoMuebles(data);
-      setPaginatorState(prevState => ({
-        ...prevState,
-        totalRecords: data.length
-      }));
-    } catch (error) {
-      setError(error.message);
-      showError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+        const data = await response.json();
+        setTipoMuebles(data);
+        setFilteredTipoMuebles(data);
+        setPaginatorState(prevState => ({
+          ...prevState,
+          totalRecords: data.length
+        }));
+      } catch (error) {
+        setError(error.message);
+        showError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
   // Cargar los tipos de mueble al montar el componente
   useEffect(() => {
     loadTipoMuebles();

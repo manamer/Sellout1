@@ -29,6 +29,7 @@ public class Venta {
     private Integer anio;
     private Integer mes;
     private int dia;
+    private String ciudad;
     private String marca;
     private double ventaDolares;
     private double ventaUnidad;
@@ -41,8 +42,6 @@ public class Venta {
     private double stockDolares;
     private double stockUnidades;
     
-    @Transient // Este campo NO se guardará en la base de datos
-    private String ciudad;
 
      @ManyToOne(fetch = FetchType.EAGER)
      @JoinColumn(name = "cliente_id", referencedColumnName = "id")

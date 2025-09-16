@@ -1,5 +1,8 @@
 package com.sellout.service;
 
+
+import com.sellout.models.LoginResponse;
+import com.sellout.models.UserSessionInfo;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,11 +17,20 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
+
 
 /**
  * Service for interacting with Keycloak.
@@ -153,6 +165,35 @@ public class KeycloakRestService {
         return restTemplate.postForObject(keycloakTokenUri, request, String.class);
     }
 
+    public LoginResponse loginWithUserInfo(String username, String password) throws Exception {
+        // Paso 1: Solicitar el token a Keycloak
+        MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
+        map.add("username", username);
+        map.add("password", password);
+        map.add("client_id", clientId);
+        map.add("grant_type", grantType);
+        map.add("client_secret", clientSecret);
+        map.add("scope", scope);
+
+        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(map, new HttpHeaders());
+        String rawResponse = restTemplate.postForObject(keycloakTokenUri, request, String.class);
+
+        // Paso 2: Obtener el access_token del JSON
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode responseJson = mapper.readTree(rawResponse);
+        String accessToken = responseJson.get("access_token").asText();
+
+        // Paso 3: Extraer datos del token
+        UserSessionInfo userInfo = extractUserInfoFromToken(accessToken);
+
+        // Paso 4: Construir respuesta
+        LoginResponse loginResponse = new LoginResponse();
+        loginResponse.setToken(accessToken);
+        loginResponse.setUser(userInfo);
+
+        return loginResponse;
+    }
+
     /**
      * Create a new user in Keycloak.
      *
@@ -190,7 +231,7 @@ public class KeycloakRestService {
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(user, headers);
 
         // Imprimir la URL completa para verificación
-        String createUserUrl = keycloakBaseUri + "/admin/realms/SellOut/users";
+        String createUserUrl = keycloakBaseUri + "/admin/realms/Comisiones/users";
         System.out.println("Creating user at URL: " + createUserUrl);
 
         try {
@@ -208,7 +249,7 @@ public class KeycloakRestService {
 
     /**
      * Get an access token for the user with the role ADMINISTRATOR in the
-     * SellOut realm.
+     * Comisiones realm.
      *
      * @return the admin token
      */
@@ -245,7 +286,7 @@ public class KeycloakRestService {
     public void sendVerificationCode(String email, String code) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON); // Mantenemos JSON para el envío de datos
-    
+
         // Construir el cuerpo del correo electrónico
         String subject = "Código de verificación para restablecer contraseña";
         String body = "Hola estimad@,\n\n"
@@ -256,15 +297,15 @@ public class KeycloakRestService {
                 + "Si no has solicitado este cambio, ignora este mensaje.\n\n"
                 + "Saludos,\n"
                 + "Equipo de Soporte";
-    
+
         // Preparar el contenido del correo electrónico
         Map<String, Object> emailContent = new HashMap<>();
         emailContent.put("destinatarios", Collections.singletonList(email));
         emailContent.put("asunto", subject);
         emailContent.put("cuerpo", body);
-    
+
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(emailContent, headers);
-    
+
         try {
             restTemplate.postForEntity(emailServiceUri + "/enviar-correo", request, String.class);
         } catch (HttpClientErrorException e) {
@@ -332,7 +373,7 @@ public class KeycloakRestService {
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         HttpEntity<Void> entity = new HttpEntity<>(headers);
-        String url = keycloakBaseUri + "/admin/realms/SellOut/users?email=" + email;
+        String url = keycloakBaseUri + "/admin/realms/Comisiones/users?email=" + email;
 
         ResponseEntity<JsonNode> response = restTemplate.exchange(url, HttpMethod.GET, entity, JsonNode.class);
 
@@ -356,7 +397,7 @@ public class KeycloakRestService {
         credentials.put("temporary", false);
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(credentials, headers);
-        String url = keycloakBaseUri + "/admin/realms/SellOut/users/" + userId + "/reset-password";
+        String url = keycloakBaseUri + "/admin/realms/Comisiones/users/" + userId + "/reset-password";
 
         restTemplate.put(url, entity);
     }
@@ -374,7 +415,7 @@ public class KeycloakRestService {
         headers.setBearerAuth(accessToken);
 
         UriComponentsBuilder builder = UriComponentsBuilder
-                .fromHttpUrl(keycloakBaseUri + "/admin/realms/SellOut/users")
+                .fromHttpUrl(keycloakBaseUri + "/admin/realms/Comisiones/users")
                 .queryParam("email", email);
 
         HttpEntity<String> entity = new HttpEntity<>(headers);
@@ -387,5 +428,65 @@ public class KeycloakRestService {
 
         Map[] users = response.getBody();
         return users != null && users.length > 0;
+    }
+
+    // Nueva configuracion
+
+    public UserSessionInfo extractUserInfoFromToken(String accessToken) throws Exception {
+        try {
+            String[] chunks = accessToken.split("\\.");
+            if (chunks.length < 2) {
+                throw new IllegalArgumentException("Token inválido");
+            }
+
+            String payload = new String(Base64.getUrlDecoder().decode(chunks[1]), StandardCharsets.UTF_8);
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode tokenData = mapper.readTree(payload);
+
+            UserSessionInfo info = new UserSessionInfo();
+            info.setUsername(tokenData.path("preferred_username").asText());
+            info.setEmail(tokenData.path("email").asText());
+
+            JsonNode resourceAccess = tokenData.path("resource_access");
+            if (resourceAccess.isMissingNode() || resourceAccess.isNull()) {
+                throw new RuntimeException("resource_access no está presente en el token.");
+            }
+
+            Map<String, List<String>> rolesPorEmpresa = new HashMap<>();
+
+            Iterator<String> clientIterator = resourceAccess.fieldNames();
+            while (clientIterator.hasNext()) {
+                String clientName = clientIterator.next();
+
+                if (clientName.startsWith("usuario-")) {
+                    String empresa = clientName.replace("usuario-", "").toUpperCase();
+                    List<String> rolesEmpresa = new ArrayList<>();
+
+                    Iterator<String> subClientIterator = resourceAccess.fieldNames();
+                    while (subClientIterator.hasNext()) {
+                        String otherClient = subClientIterator.next();
+                        if (otherClient.toLowerCase().contains(empresa.toLowerCase())) {
+                            JsonNode rolesNode = resourceAccess.path(otherClient).path("roles");
+                            if (rolesNode.isArray()) {
+                                for (JsonNode roleNode : rolesNode) {
+                                    rolesEmpresa.add(roleNode.asText());
+                                }
+                            }
+                        }
+                    }
+
+                    if (!rolesEmpresa.isEmpty()) {
+                        rolesPorEmpresa.put(empresa, rolesEmpresa);
+                    }
+                }
+            }
+
+            info.setRolesPorEmpresa(rolesPorEmpresa);
+            return info;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("Error al extraer roles por empresa del token: " + e.getMessage(), e);
+        }
     }
 }

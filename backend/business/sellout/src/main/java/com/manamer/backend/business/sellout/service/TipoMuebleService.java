@@ -2,13 +2,14 @@ package com.manamer.backend.business.sellout.service;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -21,18 +22,23 @@ import com.manamer.backend.business.sellout.models.Cliente;
 import com.manamer.backend.business.sellout.models.TipoMueble;
 import com.manamer.backend.business.sellout.repositories.ClienteRepository;
 import com.manamer.backend.business.sellout.repositories.TipoMuebleRepository;
+
 @Service
 public class TipoMuebleService {
 
-    private final TipoMuebleRepository tipoMuebleRepository;
+    public static final String COD_CLIENTE_DEPRATI = "MZCL-000009";
+    public static final String COD_CLIENTE_FYBECA  = "MZCL-000014";
 
-    private final ClienteRepository ClienteRepository;
-    
+    private final TipoMuebleRepository tipoMuebleRepository;
+    private final ClienteRepository clienteRepository;
+
     @Autowired
-    public TipoMuebleService(TipoMuebleRepository tipoMuebleRepository, ClienteRepository ClienteRepository) {
+    public TipoMuebleService(TipoMuebleRepository tipoMuebleRepository, ClienteRepository clienteRepository) {
         this.tipoMuebleRepository = tipoMuebleRepository;
-        this.ClienteRepository = ClienteRepository;
+        this.clienteRepository = clienteRepository;
     }
+
+    // ===== CRUD =====
 
     public TipoMueble guardarTipoMueble(TipoMueble tipoMueble) {
         return tipoMuebleRepository.save(tipoMueble);
@@ -43,9 +49,16 @@ public class TipoMuebleService {
     }
 
     public List<TipoMueble> obtenerTodosLosTiposMuebleDeprati() {
-        Long idCliente = 5970L;
         return tipoMuebleRepository.findAll().stream()
-                .filter(tipoMueble -> tipoMueble.getCliente() != null && tipoMueble.getCliente().getId().equals(idCliente))
+                .filter(tm -> tm.getCliente() != null
+                        && COD_CLIENTE_DEPRATI.equals(tm.getCliente().getCodCliente()))
+                .collect(Collectors.toList());
+    }
+
+    public List<TipoMueble> obtenerTodosLosTiposMuebleFybeca() {
+        return tipoMuebleRepository.findAll().stream()
+                .filter(tm -> tm.getCliente() != null
+                        && COD_CLIENTE_FYBECA.equals(tm.getCliente().getCodCliente()))
                 .collect(Collectors.toList());
     }
 
@@ -54,121 +67,157 @@ public class TipoMuebleService {
     }
 
     public TipoMueble actualizarTipoMueble(Long id, TipoMueble nuevoTipoMueble) {
-        return tipoMuebleRepository.findById(id).map(tipoMueble -> {
-            tipoMueble.setCodPdv(nuevoTipoMueble.getCodPdv());
-            tipoMueble.setNombrePdv(nuevoTipoMueble.getNombrePdv());
-            tipoMueble.setTipoMuebleEssence(nuevoTipoMueble.getTipoMuebleEssence());
-            tipoMueble.setTipoMuebleCatrice(nuevoTipoMueble.getTipoMuebleCatrice());
-            tipoMueble.setCliente(nuevoTipoMueble.getCliente());
-            tipoMueble.setCiudad(nuevoTipoMueble.getCiudad());;
-            tipoMueble.setMarca(nuevoTipoMueble.getMarca()); // Nuevo campo
-            return tipoMuebleRepository.save(tipoMueble);
+        return tipoMuebleRepository.findById(id).map(tm -> {
+            tm.setCodPdv(nuevoTipoMueble.getCodPdv());
+            tm.setNombrePdv(nuevoTipoMueble.getNombrePdv());
+            tm.setTipoMuebleEssence(nuevoTipoMueble.getTipoMuebleEssence());
+            tm.setTipoMuebleCatrice(nuevoTipoMueble.getTipoMuebleCatrice());
+            tm.setCiudad(nuevoTipoMueble.getCiudad());
+            tm.setMarca(nuevoTipoMueble.getMarca());
+            tm.setCliente(nuevoTipoMueble.getCliente());
+            return tipoMuebleRepository.save(tm);
         }).orElseThrow(() -> new RuntimeException("TipoMueble no encontrado con el ID: " + id));
     }
 
     public boolean eliminarTipoMueble(Long id) {
-        return tipoMuebleRepository.findById(id).map(tipoMueble -> {
-            tipoMuebleRepository.delete(tipoMueble);
+        return tipoMuebleRepository.findById(id).map(tm -> {
+            tipoMuebleRepository.delete(tm);
             return true;
         }).orElse(false);
     }
 
-    public List<TipoMueble> cargarTipoMueblesDesdeArchivo(MultipartFile file) {
-        List<TipoMueble> tipoMuebles = new ArrayList<>();
-        try (Workbook workbook = new XSSFWorkbook(file.getInputStream())) {
-            Sheet sheet = workbook.getSheetAt(0);
-            for (Row row : sheet) {
-                if (row.getRowNum() == 0) {
-                    continue; // Skip header row
-                }
-                TipoMueble tipoMueble = new TipoMueble();
-                tipoMueble.setCodPdv(getCellValueAsString(row.getCell(0)));
-                tipoMueble.setNombrePdv(getCellValueAsString(row.getCell(1)));
-                tipoMueble.setTipoMuebleEssence(getCellValueAsString(row.getCell(2)));
-                tipoMueble.setTipoMuebleCatrice(getCellValueAsString(row.getCell(3)));
-                tipoMueble.setCiudad(getCellValueAsString(row.getCell(4)));
-                tipoMueble.setMarca(getCellValueAsString(row.getCell(5))); // Nuevo campo
-
-                // Asignar siempre el clienteId 5969
-                Long clienteId = 5969L;
-                Cliente Cliente = ClienteRepository.findById(clienteId)
-                        .orElseThrow(() -> new RuntimeException("liente no encontrado con el ID: " + clienteId));
-                tipoMueble.setCliente(Cliente);
-
-                tipoMuebles.add(tipoMueble);
-            }
-            tipoMuebleRepository.saveAll(tipoMuebles);
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new RuntimeException("Error al cargar el archivo: " + e.getMessage());
-        }
-        return tipoMuebles;
-    }
-    
-    private String getCellValueAsString(Cell cell) {
-        if (cell == null) {
-            return "";
-        }
-        switch (cell.getCellType()) {
-            case STRING:
-                return cell.getStringCellValue();
-            case NUMERIC:
-                return String.valueOf((long) cell.getNumericCellValue());
-            case BOOLEAN:
-                return String.valueOf(cell.getBooleanCellValue());
-            case FORMULA:
-                return cell.getCellFormula();
-            default:
-                return "";
-        }
-    }
-
     public boolean eliminarTiposMueble(List<Long> ids) {
-        List<TipoMueble> tiposMuebles = tipoMuebleRepository.findAllById(ids);
-        if (tiposMuebles.isEmpty()) {
-            return false;
-        }
-        tipoMuebleRepository.deleteAll(tiposMuebles);
+        var list = tipoMuebleRepository.findAllById(ids);
+        if (list.isEmpty()) return false;
+        tipoMuebleRepository.deleteAll(list);
         return true;
     }
 
     public List<TipoMueble> obtenerTiposMueblePorCliente(Long idCliente) {
         return tipoMuebleRepository.findAll().stream()
-                .filter(tipoMueble -> tipoMueble.getCliente() != null && tipoMueble.getCliente().getId().equals(idCliente))
+                .filter(tm -> tm.getCliente() != null && tm.getCliente().getId().equals(idCliente))
                 .collect(Collectors.toList());
     }
-    
-    public List<TipoMueble> cargarTipoMueblesDesdeArchivoDeprati(MultipartFile file) {
+
+    // ===== Cargas desde archivos =====
+
+    /**
+     * Carga genérica: usa el código de cliente para resolver y asignar el ID real.
+     * Sirve para Deprati y Fybeca.
+     */
+    public List<TipoMueble> cargarTipoMueblesDesdeArchivo(MultipartFile file, String codCliente) {
         List<TipoMueble> tipoMuebles = new ArrayList<>();
         try (Workbook workbook = new XSSFWorkbook(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
-            for (Row row : sheet) {
-                if (row.getRowNum() == 0) {
-                    continue; // Skip header row
-                }
-                TipoMueble tipoMueble = new TipoMueble();
-                tipoMueble.setCodPdv(getCellValueAsString(row.getCell(0)));
-                tipoMueble.setNombrePdv(getCellValueAsString(row.getCell(1)));
-                tipoMueble.setTipoMuebleEssence(getCellValueAsString(row.getCell(2)));
-                tipoMueble.setTipoMuebleCatrice(getCellValueAsString(row.getCell(3)));
-                tipoMueble.setCiudad(getCellValueAsString(row.getCell(4)));
-                tipoMueble.setMarca(getCellValueAsString(row.getCell(5))); // Nuevo campo
+            // Fila 0 = encabezado
+            for (int r = 1; r <= sheet.getLastRowNum(); r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
 
-                // Asignar siempre el clienteId 5969
-                Long clienteId = 5970L;
-                Cliente Cliente = ClienteRepository.findById(clienteId)
-                        .orElseThrow(() -> new RuntimeException("MantenimientoCliente no encontrado con el ID: " + clienteId));
-                tipoMueble.setCliente(Cliente);
+                // Si toda la fila está vacía, saltar
+                if (filaVacia(row)) continue;
 
-                tipoMuebles.add(tipoMueble);
+                TipoMueble tm = new TipoMueble();
+                tm.setCodPdv(getString(row, 0));
+                tm.setNombrePdv(getString(row, 1));
+                tm.setTipoMuebleEssence(getString(row, 2));
+                tm.setTipoMuebleCatrice(getString(row, 3));
+                tm.setCiudad(getString(row, 4));
+                tm.setMarca(getString(row, 5));
+
+                tm.setCliente(resolveClienteByCodigo(codCliente)); // asigna ID real
+                tipoMuebles.add(tm);
             }
-            tipoMuebleRepository.saveAll(tipoMuebles);
+            return tipoMuebleRepository.saveAll(tipoMuebles);
         } catch (IOException e) {
-            e.printStackTrace();
-            throw new RuntimeException("Error al cargar el archivo: " + e.getMessage());
+            throw new RuntimeException("Error al cargar el archivo: " + e.getMessage(), e);
         }
-        return tipoMuebles;
     }
 
-     
+    /**
+     * Deprati: atajo que delega a la genérica, fijando el código de cliente MZCL-000009.
+     */
+    public List<TipoMueble> cargarTipoMueblesDesdeArchivoDeprati(MultipartFile file) {
+        return cargarTipoMueblesDesdeArchivo(file, COD_CLIENTE_DEPRATI);
+    }
+
+    /**
+     * Fybeca: atajo que delega a la genérica, fijando el código de cliente MZCL-000014.
+     */
+    public List<TipoMueble> cargarTipoMueblesDesdeArchivoFybeca(MultipartFile file) {
+        return cargarTipoMueblesDesdeArchivo(file, COD_CLIENTE_FYBECA);
+    }
+
+    // ===== Helpers =====
+
+    private Workbook crearWorkbook(MultipartFile file) throws IOException {
+        String nombre = file.getOriginalFilename();
+        if (nombre != null && nombre.toLowerCase().endsWith(".xls")) {
+            return new HSSFWorkbook(file.getInputStream());
+        } else if (nombre != null && nombre.toLowerCase().endsWith(".xlsx")) {
+            return new XSSFWorkbook(file.getInputStream());
+        }
+        throw new IllegalArgumentException("Formato no soportado: " + nombre);
+    }
+
+    private boolean filaVacia(Row row, int... columnas) {
+        if (row == null) return true;
+        if (columnas == null || columnas.length == 0) {
+            short last = row.getLastCellNum();
+            for (int c = 0; c < last; c++) {
+                if (notBlank(getString(row, c))) return false;
+            }
+            return true;
+        } else {
+            for (int c : columnas) {
+                if (notBlank(getString(row, c))) return false;
+            }
+            return true;
+        }
+    }
+
+    private boolean notBlank(String s) {
+        return s != null && !s.trim().isEmpty();
+    }
+
+    private String getString(Row row, int col) {
+        try {
+            Cell cell = row.getCell(col);
+            if (cell == null) return null;
+
+            if (cell.getCellType() == CellType.STRING) {
+                String v = cell.getStringCellValue();
+                return v == null ? null : v.trim();
+            } else if (cell.getCellType() == CellType.NUMERIC) {
+                double d = cell.getNumericCellValue();
+                long asLong = (long) d;
+                if (Math.abs(d - asLong) < 1e-9) return String.valueOf(asLong);
+                return String.valueOf(d);
+            } else if (cell.getCellType() == CellType.BOOLEAN) {
+                return String.valueOf(cell.getBooleanCellValue());
+            } else if (cell.getCellType() == CellType.FORMULA) {
+                try {
+                    return cell.getStringCellValue().trim();
+                } catch (IllegalStateException ex) {
+                    try {
+                        double val = cell.getNumericCellValue();
+                        long li = (long) val;
+                        if (Math.abs(val - li) < 1e-9) return String.valueOf(li);
+                        return String.valueOf(val);
+                    } catch (Exception ignored) {
+                        return null;
+                    }
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Cliente resolveClienteByCodigo(String codCliente) {
+        return clienteRepository.findByCodCliente(codCliente)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Cliente no encontrado con codCliente: " + codCliente));
+    }
 }

@@ -22,7 +22,7 @@ spring:
       - id: sellout_service
         uri: lb://business-sellout
         predicates:
-        - Path=/api/fybeca/**, /api/deprati/**
+        - Path=/api/fybeca/**, /api/deprati/**, /api/clientes/**, /api/template-general/**
 
       - id: keycloak_service
         uri: lb://infraestructure-keycloak

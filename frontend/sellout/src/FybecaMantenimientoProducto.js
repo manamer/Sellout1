@@ -1,373 +1,446 @@
-import React, { useEffect, useState } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEdit, faFileUpload, faFileDownload } from "@fortawesome/free-solid-svg-icons";
-import "./css/fybeca.css"; // Asegúrate de tener tu archivo CSS
-import { ProgressSpinner } from 'primereact/progressspinner';
+import React, { useEffect, useRef, useState, useMemo } from "react";
+import "./css/fybeca.css";
+import { Toast } from "primereact/toast";
+import { ConfirmDialog, confirmDialog } from "primereact/confirmdialog";
+import { Toolbar } from "primereact/toolbar";
+import { DataTable } from "primereact/datatable";
+import { Column } from "primereact/column";
+import { Button } from "primereact/button";
+import { InputText } from "primereact/inputtext";
+import { Dialog } from "primereact/dialog";
+import { ProgressSpinner } from "primereact/progressspinner";
+import "primereact/resources/themes/lara-light-indigo/theme.css";
+import "primereact/resources/primereact.min.css";
+import "primeicons/primeicons.css";
+import "primeflex/primeflex.css";
+
+// ===================== Helpers para manejo de respuesta de borrado =====================
+export async function parseDeleteResponse(resp) {
+  // 1) Intentar JSON
+  try {
+    const data = await resp.clone().json();
+    if (data && (Array.isArray(data.eliminados) || Array.isArray(data.bloqueados))) {
+      return {
+        eliminados: data.eliminados || [],
+        bloqueados: data.bloqueados || [],
+        bloqueadosInfo: data.bloqueadosInfo || [],
+        message: data.message || "Operación completada",
+      };
+    }
+  } catch (_) {}
+
+  // 2) Intentar texto (caso error 500 con mensaje)
+  let txt = "";
+  try {
+    txt = await resp.text();
+  } catch (_) {}
+
+  const ids = [];
+  const m = txt.match(/\[(.*?)\]/);
+  if (m && m[1]) {
+    m[1].split(",").forEach((s) => {
+      const n = parseInt(s.trim(), 10);
+      if (!Number.isNaN(n)) ids.push(n);
+    });
+  }
+
+  const motivo = /ventas asociadas|FOREIGN KEY|REFERENCE/i.test(txt)
+    ? "Tiene ventas asociadas"
+    : "Restricción de integridad referencial";
+
+  return {
+    eliminados: [],
+    bloqueados: ids,
+    bloqueadosInfo: ids.map((id) => ({ id })),
+    message: txt || `No se pudieron eliminar algunos productos. Motivo: ${motivo}`,
+  };
+}
+
+export function showDeletionOutcome({ eliminados, bloqueados, bloqueadosInfo, message }, showSuccess, showWarn, showInfo) {
+  if (eliminados?.length) {
+    showSuccess(`Eliminados: ${eliminados.length}`);
+  }
+  if (bloqueados?.length) {
+    const detalle = (bloqueadosInfo && bloqueadosInfo.length)
+      ? bloqueadosInfo.map((p) => `ID ${p.id} (Item: ${p.codItem ?? "-"}, Barra: ${p.codBarraSap ?? "-"})`).join("; ")
+      : `IDs: ${bloqueados.join(", ")}`;
+    const motivo = /ventas asociadas/i.test(message)
+      ? "Tiene ventas asociadas"
+      : "Restricción de integridad referencial";
+    showWarn(`No se pudieron eliminar ${bloqueados.length} producto(s). Motivo: ${motivo}. ${detalle}`);
+  }
+  if (!eliminados?.length && !bloqueados?.length) {
+    showInfo(message || "Operación completada");
+  }
+}
+// ======================================================================================
 
 const FybecaMantenimientoProducto = () => {
+  const toast = useRef(null);
+  const fileInputRef = useRef(null);
+
   const [productos, setProductos] = useState([]);
-  const [clientes, setClientes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [productoEditar, setProductoEditar] = useState(null);
-  const [showModal, setShowModal] = useState(false);
+
+  const [globalFilter, setGlobalFilter] = useState("");
+
+  // 🔹 Selección tipo Fybeca: IDs, no objetos
+  const [selectedProductos, setSelectedProductos] = useState([]);
+
+  const [editProducto, setEditProducto] = useState(null);
+  const [showDialog, setShowDialog] = useState(false);
   const [file, setFile] = useState(null);
-  const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(2000); // Paginación por lote de 2000 productos
-  const [filter, setFilter] = useState(""); // Estado para almacenar el filtro
 
-  useEffect(() => {
-    const fetchProductos = async () => {
-      try {
-        const response = await fetch("/api/fybeca/productos");
-        if (!response.ok) {
-          throw new Error("Error al obtener los productos");
-        }
-        const data = await response.json();
-        setProductos(data);
-      } catch (error) {
-        console.error(error);
-      }
-    };
+  const [paginatorState, setPaginatorState] = useState({
+    first: 0,
+    rows: 10,
+    totalRecords: 0,
+  });
 
-    fetchProductos();
-  }, []);
+  const showToast = ({ type = "info", summary, detail, life = 3000 }) => {
+    toast.current?.show({ severity: type, summary, detail, life });
+  };
+  const showSuccess = (m) => showToast({ type: "success", summary: "Éxito", detail: m });
+  const showInfo = (m) => showToast({ type: "info", summary: "Información", detail: m });
+  const showWarn = (m) => showToast({ type: "warn", summary: "Advertencia", detail: m });
+  const showError = (m) => showToast({ type: "error", summary: "Error", detail: m });
 
-  // Cargar productos con paginación
   const loadProductos = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/fybeca/productos?page=${page}&size=${itemsPerPage}`);
-      if (!response.ok) {
-        throw new Error(`Error al cargar productos: ${response.statusText}`);
-      }
-      const data = await response.json();
+      const resp = await fetch("/api/fybeca/productos");
+      if (!resp.ok) throw new Error("Error al obtener los productos");
+      const data = await resp.json();
       setProductos(data);
-    } catch (error) {
-      setError(error.message);
+      setPaginatorState((p) => ({ ...p, totalRecords: data.length, first: 0 }));
+      setSelectedProductos([]);
+    } catch (e) {
+      setError(e.message);
+      showError(e.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Cargar todos los clientes
-  const loadClientes = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/fybeca/cliente");
-      if (!response.ok) {
-        throw new Error(`Error al cargar clientes: ${response.statusText}`);
-      }
-      const data = await response.json();
-      setClientes(data);
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Crear o actualizar un producto
-  const handleSaveProducto = async (e) => {
-    e.preventDefault();
-    setLoading(true); // Activa el spinner mientras se guarda el producto
-    try {
-      const response = await fetch("/api/fybeca/producto", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(productoEditar),
-      });
-      if (!response.ok) {
-        throw new Error("Error al guardar el producto");
-      }
-      await loadProductos(); // 🔄 Recargar lista de productos después de guardar
-      setShowModal(false);
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setLoading(false); // Desactiva el spinner después del proceso
-    }
-  };
-  
-
-  // Editar producto
-  const handleEdit = (id) => {
-    const producto = productos.find((p) => p.id === id);
-    setProductoEditar(producto);
-    setShowModal(true);
-  };
-
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setProductoEditar(null);
-  };
-
-  // Manejo de entradas del formulario
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setProductoEditar((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  // Cargar productos desde un archivo XLSX
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
-  };
-
-  const handleUploadFile = async () => {
-    if (!file) {
-      alert("Por favor, seleccione un archivo");
-      return;
-    }
-  
-    setLoading(true); // Activa el spinner antes de subir el archivo
-    const formData = new FormData();
-    formData.append("file", file);
-  
-    try {
-      const response = await fetch("/api/fybeca/template-productos", {
-        method: "POST",
-        body: formData,
-      });
-      if (!response.ok) {
-        throw new Error("Error al cargar el archivo");
-      }
-      alert(await response.text()); // Mensaje de éxito
-      await loadProductos(); // 🔄 Recargar lista de productos
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setLoading(false); // Desactiva el spinner después del proceso
-    }
-  };
-  
-
-  // Eliminar productos seleccionados
-  const handleDeleteSelected = async () => {
-    const selectedIds = productos
-      .filter((producto) => producto.selected)
-      .map((producto) => producto.id);
-  
-    if (selectedIds.length === 0) {
-      alert("No hay productos seleccionados para eliminar.");
-      return;
-    }
-  
-    const confirmDelete = window.confirm(
-      `¿Estás seguro de eliminar ${selectedIds.length} producto(s)?`
-    );
-    if (!confirmDelete) return;
-  
-    setLoading(true); // Activa el spinner antes de eliminar
-  
-    // 🔹 Definir `batches` correctamente
-    const batchSize = 2000;
-    const batches = [];
-    for (let i = 0; i < selectedIds.length; i += batchSize) {
-      batches.push(selectedIds.slice(i, i + batchSize));
-    }
-  
-    try {
-      for (const batch of batches) {
-        const response = await fetch("/api/fybeca/productos", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(batch),
-        });
-  
-        if (!response.ok) {
-          throw new Error("Error al eliminar los productos en uno de los lotes");
-        }
-      }
-  
-      alert("Productos eliminados correctamente.");
-      await loadProductos(); // 🔄 Recargar productos después de eliminar
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setLoading(false); // Desactiva el spinner después del proceso
-    }
-  };
-  
-  
-
-  // Filtrar productos por el filtro ingresado
-  const filteredProductos = productos.filter((producto) => {
-    return (
-      producto.codItem.toLowerCase().includes(filter.toLowerCase()) ||
-      producto.codBarraSap.toLowerCase().includes(filter.toLowerCase())
-    );
-  });
-
-  // Cargar productos y clientes al inicio
   useEffect(() => {
     loadProductos();
-    loadClientes();
-  }, [page]); // Cambia la página cada vez que se actualice el número de página
+  }, []);
 
-  // Función para generar el reporte con los filtros aplicados
-  const generateReport = async () => {
+  const onEdit = (row) => {
+    setEditProducto({ ...row });
+    setShowDialog(true);
+  };
+
+  const onSaveProducto = async () => {
     try {
-      const response = await fetch("/api/fybeca/reporte-productos", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const resp = await fetch("/api/fybeca/producto", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editProducto),
       });
-
-      if (!response.ok) {
-        throw new Error("Error al generar el reporte");
-      }
-
-      const reportBlob = await response.blob();
-      const url = URL.createObjectURL(reportBlob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "reporte_productos.xlsx"; // Nombre del archivo a descargar
-      link.click();
-      URL.revokeObjectURL(url); // Limpiar el objeto URL después de la descarga
-    } catch (error) {
-      console.error("Error al generar el reporte:", error);
+      if (!resp.ok) throw new Error("Error al guardar el producto");
+      showSuccess("Producto guardado correctamente");
+      setShowDialog(false);
+      setEditProducto(null);
+      await loadProductos();
+    } catch (e) {
+      showError(e.message);
     }
   };
+
+  // =================== BORRADO INDIVIDUAL ===================
+  const deleteSingleProducto = (id) => {
+    confirmDialog({
+      message: "¿Está seguro de eliminar este producto?",
+      header: "Confirmación",
+      icon: "pi pi-exclamation-triangle",
+      acceptLabel: "Sí, eliminar",
+      rejectLabel: "Cancelar",
+      acceptClassName: "p-button-danger",
+      accept: async () => {
+        try {
+          const resp = await fetch("/api/fybeca/productos", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify([id]),
+          });
+
+          const result = await parseDeleteResponse(resp);
+
+          if (result.eliminados?.includes(id)) {
+            setProductos((prev) => prev.filter((p) => p.id !== id));
+            setSelectedProductos((prev) => prev.filter((pid) => pid !== id));
+            setPaginatorState((p) => ({ ...p, totalRecords: Math.max(0, p.totalRecords - 1) }));
+          }
+
+          showDeletionOutcome(result, showSuccess, showWarn, showInfo);
+        } catch (e) {
+          showError(e.message || "Error al eliminar el producto");
+        }
+      },
+    });
+  };
+
+  // =================== BORRADO MASIVO ===================
+  const onDeleteSelected = () => {
+    if (!selectedProductos?.length) {
+      showInfo("No hay productos seleccionados");
+      return;
+    }
+    confirmDialog({
+      message: `¿Está seguro de eliminar ${selectedProductos.length} producto(s)?`,
+      header: "Confirmación",
+      icon: "pi pi-exclamation-triangle",
+      acceptLabel: "Sí, eliminar",
+      rejectLabel: "Cancelar",
+      acceptClassName: "p-button-danger",
+      accept: async () => {
+        try {
+          const ids = selectedProductos;
+          const batchSize = 1000;
+          let eliminadosTotal = [];
+          let bloqueadosTotal = [];
+          let bloqueadosInfoTotal = [];
+          let messages = [];
+
+          for (let i = 0; i < ids.length; i += batchSize) {
+            const batch = ids.slice(i, i + batchSize);
+            const resp = await fetch("/api/fybeca/productos", {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(batch),
+            });
+            const result = await parseDeleteResponse(resp);
+            eliminadosTotal = eliminadosTotal.concat(result.eliminados || []);
+            bloqueadosTotal = bloqueadosTotal.concat(result.bloqueados || []);
+            bloqueadosInfoTotal = bloqueadosInfoTotal.concat(result.bloqueadosInfo || []);
+            if (result.message) messages.push(result.message);
+          }
+
+          const removeSet = new Set(eliminadosTotal);
+          setProductos((prev) => prev.filter((p) => !removeSet.has(p.id)));
+          setSelectedProductos([]);
+          setPaginatorState((p) => ({
+            ...p,
+            totalRecords: Math.max(0, p.totalRecords - eliminadosTotal.length),
+          }));
+
+          showDeletionOutcome(
+            {
+              eliminados: eliminadosTotal,
+              bloqueados: bloqueadosTotal,
+              bloqueadosInfo: bloqueadosInfoTotal,
+              message: messages.join(" | "),
+            },
+            showSuccess,
+            showWarn,
+            showInfo
+          );
+        } catch (e) {
+          showError(e.message || "Error al eliminar productos");
+        }
+      },
+    });
+  };
+
+  // ========= Selección masiva estilo Fybeca =========
+  const globalFilterFields = ["codItem", "codBarraSap", "id"];
+
+  const visibleProductos = useMemo(() => {
+    const query = (globalFilter || "").toLowerCase().trim();
+    if (!query) return productos;
+    return productos.filter((p) =>
+      globalFilterFields.some((f) => {
+        const val = f.includes(".") ? f.split(".").reduce((acc, k) => (acc ? acc[k] : undefined), p) : p[f];
+        return String(val ?? "").toLowerCase().includes(query);
+      })
+    );
+  }, [productos, globalFilter]);
+
+  const allVisibleIds = useMemo(() => visibleProductos.map((p) => p.id), [visibleProductos]);
+
+  const areAllVisibleSelected = allVisibleIds.length > 0 && allVisibleIds.every((id) => selectedProductos.includes(id));
+
+  const handleSelectProducto = (id) => {
+    setSelectedProductos((prev) => (prev.includes(id) ? prev.filter((pid) => pid !== id) : [...prev, id]));
+  };
+
+  const handleSelectAll = () => {
+    if (areAllVisibleSelected) {
+      setSelectedProductos((prev) => prev.filter((id) => !allVisibleIds.includes(id)));
+    } else {
+      setSelectedProductos((prev) => {
+        const setPrev = new Set(prev);
+        allVisibleIds.forEach((id) => setPrev.add(id));
+        return Array.from(setPrev);
+      });
+    }
+  };
+
+  const selectionHeaderTemplate = () => (
+    <div className="flex justify-content-center">
+      <input type="checkbox" checked={areAllVisibleSelected} onChange={handleSelectAll} className="p-checkbox" aria-label="Seleccionar todo" />
+    </div>
+  );
+
+  const selectionBodyTemplate = (rowData) => (
+    <div className="flex justify-content-center">
+      <input type="checkbox" checked={selectedProductos.includes(rowData.id)} onChange={() => handleSelectProducto(rowData.id)} className="p-checkbox" aria-label={`Seleccionar ${rowData.id}`} />
+    </div>
+  );
+  // ==================================================
+
+  // =================== SUBIDA / REPORTE ===================
+  const onUpload = async () => {
+    if (!file) {
+      showWarn("Seleccione un archivo XLSX primero");
+      return;
+    }
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const resp = await fetch("/api/fybeca/template-productos", { method: "POST", body: formData });
+      if (!resp.ok) throw new Error("Error al cargar el archivo");
+      const msg = await resp.text();
+      showSuccess(msg || "Archivo procesado");
+      setFile(null);
+      await loadProductos();
+    } catch (e) {
+      showError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onGenerateReport = async () => {
+    try {
+      const response = await fetch("/api/fybeca/reporte-productos", { method: "GET" });
+      if (!response.ok) throw new Error("Error al generar el reporte");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "reporte_productos.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+      showSuccess("Reporte generado correctamente");
+    } catch (e) {
+      showError(e.message);
+    }
+  };
+  // ========================================================
+
+  // =================== ACCIONES / HEADER ===================
+  const actionTemplate = (row) => (
+    <div className="flex gap-2 justify-content-center">
+      <Button icon="pi pi-pencil" className="p-button-rounded p-button-success p-button-outlined" onClick={() => onEdit(row)} tooltip="Editar" />
+      <Button icon="pi pi-trash" className="p-button-rounded p-button-danger p-button-outlined" onClick={() => deleteSingleProducto(row.id)} tooltip="Eliminar" />
+    </div>
+  );
+
+  const header = (
+    <div className="flex flex-wrap align-items-center justify-content-between w-full">
+      <h3 className="m-0">Productos</h3>
+      <span className="p-input-icon-left">
+        <i className="pi pi-search" />
+        <InputText
+          value={globalFilter}
+          onChange={(e) => {
+            setGlobalFilter(e.target.value);
+            setPaginatorState((p) => ({ ...p, first: 0 }));
+          }}
+          placeholder="Buscar por cualquier campo"
+        />
+      </span>
+    </div>
+  );
+  // ========================================================
 
   return (
     <div className="container">
+      <Toast ref={toast} />
+      <ConfirmDialog />
       <h1>Mantenimiento Producto</h1>
 
+      <Toolbar
+        className="mb-3"
+        left={
+          <Button label="Eliminar Seleccionados" icon="pi pi-trash" className="p-button-danger" onClick={onDeleteSelected} disabled={!selectedProductos?.length} />
+        }
+        right={
+          <div className="flex flex-wrap gap-2">
+            <Button label="Importar XLSX" icon="pi pi-upload" className="p-button-help" onClick={() => fileInputRef.current?.click()} />
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={(e) => setFile(e.target.files?.[0] || null)} style={{ display: "none" }} />
+            <Button label="Cargar" icon="pi pi-check" onClick={onUpload} disabled={!file} />
+            <a href="/TEMPLATE CODIGOS BARRA Y ITEM.xlsx" download>
+              <Button label="Descargar Template" icon="pi pi-download" className="p-button-info" />
+            </a>
+            <Button label="Reporte" icon="pi pi-file-excel" className="p-button-success" onClick={onGenerateReport} />
+          </div>
+        }
+      />
+
       {loading ? (
-         <div style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "200px" // Ajusta la altura para centrar el spinner
-        }}>
-          <ProgressSpinner
-            style={{ width: "50px", height: "50px" }}
-            strokeWidth="6"
-            fill="var(--surface-ground)"
-            animationDuration="0.7s"
-          />
+        <div className="flex justify-content-center align-items-center" style={{ height: 200 }}>
+          <ProgressSpinner style={{ width: 50, height: 50 }} />
         </div>
       ) : error ? (
         <p className="error">Error: {error}</p>
       ) : (
-        <>
-          {/* Botones arriba de la tabla */}
-          <div className="buttons-top">
-            <div className="upload-section">
-              <h3 class="text-black">Cargar Archivo XLSX</h3>
-              <div className="file-upload" onClick={() => document.getElementById('fileInput').click()}>
-                <FontAwesomeIcon icon={faFileUpload} /> Elegir Archivo
-              </div>
-              <input
-                type="file"
-                id="fileInput"
-                onChange={handleFileChange}
-                style={{ display: "none" }}
-              />
-              <button onClick={handleUploadFile} className="btn-upload">
-                Cargar Productos
-              </button>
-              <a href="/TEMPLATE CODIGOS BARRA Y ITEM.xlsx" download="TEMPLATE CODIGOS BARRA Y ITEM.xlsx">
-                <button className="tomato-button">Descargar Template</button>
-              </a>
-            </div>
-
-            <button
-              onClick={handleDeleteSelected}
-              className="btn-delete"
-              disabled={!productos.some((producto) => producto.selected)}
-            >
-              Eliminar Seleccionados
-            </button>
-            
-            {/* Botón para generar reporte */}
-            <button onClick={generateReport} className="btn-download">
-              <FontAwesomeIcon icon={faFileDownload} /> Generar Reporte
-            </button>
-          </div>
-
-          {/* Filtro de productos */}
-          <div className="filter-section">
-            <input
-              type="text"
-              placeholder="Filtrar productos"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)} // Actualizar el estado del filtro
-              className="filter-input"
-            />
-          </div>
-
-          {/* Lista de productos */}
-          <table className="producto-table">
-            <thead>
-              <tr>
-                <th>Selección</th>
-                <th>Código Item</th>
-                <th>Código Barra SAP</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProductos.map((producto) => (
-                <tr key={producto.id}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={producto.selected || false}
-                      onChange={() => {
-                        producto.selected = !producto.selected;
-                        setProductos([...productos]);
-                      }}
-                    />
-                  </td>
-                  <td>{producto.codItem}</td>
-                  <td>{producto.codBarraSap}</td>
-                  <td>
-                    <button onClick={() => handleEdit(producto.id)} className="btn-edit">
-                      <FontAwesomeIcon icon={faEdit} /> Editar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* Modal para editar producto */}
-          {showModal && (
-            <div className="modal">
-              <div className="modal-content">
-                <h3>Editar Producto</h3>
-                <form onSubmit={handleSaveProducto}>
-                  <label>Código Item</label>
-                  <input
-                    type="text"
-                    name="codItem"
-                    value={productoEditar.codItem}
-                    onChange={handleInputChange}
-                    required
-                  />
-                  <label>Código Barra SAP</label>
-                  <input
-                    type="text"
-                    name="codBarraSap"
-                    value={productoEditar.codBarraSap}
-                    onChange={handleInputChange}
-                    required
-                  />
-                  <button type="submit">Guardar</button>
-                </form>
-                <button onClick={handleCloseModal}>Cerrar</button>
-              </div>
-            </div>
-          )}
-        </>
+        <DataTable
+          value={visibleProductos}
+          header={header}
+          paginator
+          rows={paginatorState.rows}
+          rowsPerPageOptions={[5, 10, 25, 50, 100]}
+          totalRecords={visibleProductos.length}
+          first={paginatorState.first}
+          onPage={(e) => setPaginatorState((p) => ({ ...p, first: e.first, rows: e.rows }))}
+          dataKey="id"
+          responsiveLayout="scroll"
+          showGridlines
+          stripedRows
+          removableSort
+          emptyMessage="No hay productos disponibles."
+          className="p-datatable-sm"
+        >
+          <Column header={selectionHeaderTemplate} body={selectionBodyTemplate} style={{ width: "3rem" }} exportable={false} />
+          <Column field="codItem" header="Código Item" sortable />
+          <Column field="codBarraSap" header="Código Barra SAP" sortable />
+          <Column body={actionTemplate} header="Acciones" style={{ width: "8rem" }} />
+        </DataTable>
       )}
+
+      <Dialog
+        key={editProducto?.id || "new"}
+        visible={showDialog}
+        onHide={() => setShowDialog(false)}
+        header="Editar Producto"
+        modal
+        style={{ width: "40rem" }}
+        footer={
+          <div className="flex justify-content-end gap-2">
+            <Button label="Cancelar" icon="pi pi-times" className="p-button-text" onClick={() => setShowDialog(false)} />
+            <Button label="Guardar" icon="pi pi-check" onClick={onSaveProducto} />
+          </div>
+        }
+      >
+        {editProducto && (
+          <div className="grid formgrid p-fluid">
+            <div className="field col-12">
+              <label htmlFor="codItem" className="block mb-2">Código Item</label>
+              <InputText id="codItem" value={editProducto.codItem || ""} onChange={(e) => setEditProducto({ ...editProducto, codItem: e.target.value })} />
+            </div>
+            <div className="field col-12">
+              <label htmlFor="codBarraSap" className="block mb-2">Código Barra SAP</label>
+              <InputText id="codBarraSap" value={editProducto.codBarraSap || ""} onChange={(e) => setEditProducto({ ...editProducto, codBarraSap: e.target.value })} />
+            </div>
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 };

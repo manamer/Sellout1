@@ -8,14 +8,13 @@ const Login = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  
-  // Efecto para animar el formulario al cargar
+
+  // Animación de entrada (conserva tu UI original)
   useEffect(() => {
     const form = document.querySelector('.login-form');
     if (form) {
       form.style.opacity = '0';
       form.style.transform = 'translateY(20px)';
-      
       setTimeout(() => {
         form.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
         form.style.opacity = '1';
@@ -24,86 +23,70 @@ const Login = ({ onLogin }) => {
     }
   }, []);
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setIsLoading(true);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setError('');
-
-    const requestBody = new FormData();
-    let loginType;
-
-    if (isNumeric(username)) {
-      loginType = 'cedulaEmpleado';
-      requestBody.append('username', username);
-    } else {
-      loginType = 'username';
-      requestBody.append('username', username);
-    }
-    requestBody.append('password', password);
+    setIsLoading(true);
 
     try {
-      const response = await fetch('/api/security/login', {
+      // SOLO endpoint nuevo (JSON)
+      const response = await fetch('/api/security/loginPrueba', {
         method: 'POST',
-        body: requestBody,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
       });
 
       if (!response.ok) {
-        throw new Error('Usuario o contraseña incorrectos');
+        throw new Error('Credenciales inválidas o error de servidor');
       }
 
       const data = await response.json();
-      const { access_token, expires_in, refresh_token } = data;
-
-      localStorage.setItem('access_token', access_token);
-      localStorage.setItem('expires_in', expires_in);
-      localStorage.setItem('refresh_token', refresh_token);
-
-      if (loginType === 'cedulaEmpleado') {
-        localStorage.setItem('cedulaEmpleado', username);
-      } else {
-        localStorage.setItem('username', username);
+      if (!data?.token || !data?.user) {
+        throw new Error('Respuesta inesperada del servidor');
       }
 
-      const userInfo = parseJwt(access_token);
-      localStorage.setItem('userEmail', userInfo.email);
-      localStorage.setItem('userId', userInfo.id);
-      // Guardar el nombre de usuario para mostrarlo después del login
-      localStorage.setItem('displayName', username);
+      const { token, user } = data;
 
-      const roles = await getRoles(access_token, loginType, username);
+      // Validar acceso para 360CORP (por defecto si no existe appName en LS)
+      const rolesPorEmpresa = user.rolesPorEmpresa || {};
+      const appName = (localStorage.getItem('appName') || '360CORP').toUpperCase();
+      if (!rolesPorEmpresa[appName]) {
+        throw new Error('No tienes acceso a esta aplicación.');
+      }
 
-      const userData = {
-        username: username,
-        roles: roles,
-        email: userInfo.email,
-        id: userInfo.id,
-      };
+      // Persistencia (respetando tus claves en localStorage)
+      localStorage.setItem('access_token', token);
+      localStorage.setItem('username', user.username || username);
+      if (user.email) localStorage.setItem('userEmail', user.email);
+      if (user.id) localStorage.setItem('userId', String(user.id));
+      localStorage.setItem('displayName', user.username || username);
+      localStorage.setItem('rolesPorEmpresa', JSON.stringify(rolesPorEmpresa));
+      localStorage.setItem('rolesAppActual', JSON.stringify(rolesPorEmpresa[appName] || []));
 
-      // Animación de éxito antes de redirigir
+      // Animación de éxito antes de redirigir (mantiene tu comportamiento)
       const form = document.querySelector('.login-form');
+      const go = () => {
+        onLogin({ username: user.username || username, email: user.email, roles: rolesPorEmpresa });
+        navigate('/');
+      };
       if (form) {
         form.style.transition = 'transform 0.5s ease, opacity 0.5s ease';
         form.style.transform = 'scale(1.03)';
         setTimeout(() => {
           form.style.opacity = '0';
           form.style.transform = 'scale(0.95)';
-          
-          // Llamar a onLogin con los datos del usuario
-          setTimeout(() => {
-            onLogin(userData);
-            // Redirigir al usuario a la página principal o dashboard
-            navigate('/');
-          }, 300);
+          setTimeout(go, 300);
         }, 200);
       } else {
-        onLogin(userData);
-        navigate('/');
+        go();
       }
-    } catch (error) {
-      setError(error.message);
-      // Animación de error
+    } catch (err) {
+      const msg = err?.message || 'Error al iniciar sesión';
+      setError(msg);
+
+      // Animación de sacudida (mantiene tu feedback visual)
       const inputFields = document.querySelectorAll('.input-field');
-      inputFields.forEach(field => {
+      inputFields.forEach((field) => {
         field.style.transition = 'transform 0.1s ease';
         field.style.transform = 'translateX(10px)';
         setTimeout(() => {
@@ -115,45 +98,6 @@ const Login = ({ onLogin }) => {
       });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const isNumeric = (value) => {
-    return /^\d+$/.test(value);
-  };
-
-  const parseJwt = (token) => {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    return JSON.parse(jsonPayload);
-  };
-
-  const getRoles = async (token, loginType, username) => {
-    try {
-      const response = await fetch('/api/security/roles', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener los roles');
-      }
-
-      const roles = await response.json();
-      console.log('Roles del usuario:', roles);
-
-      return roles;
-    } catch (error) {
-      console.error('Error al obtener los roles:', error);
-      setError('Error al obtener los roles del usuario');
-      return [];
     }
   };
 
@@ -189,11 +133,7 @@ const Login = ({ onLogin }) => {
             />
           </div>
           {error && <div className="error-message">{error}</div>}
-          <button
-            type="submit"
-            className="submit-button"
-            disabled={isLoading}
-          >
+          <button type="submit" className="submit-button" disabled={isLoading}>
             {isLoading ? (
               <>
                 <svg className="spinner" viewBox="0 0 24 24">
@@ -204,9 +144,6 @@ const Login = ({ onLogin }) => {
               </>
             ) : 'Iniciar sesión'}
           </button>
-          <div className="register-link">
-            <p><a href="/registrar">Registrarse</a> | <a href="/OlvidarContraseña">Recuperar contraseña</a></p>
-          </div>
         </form>
       </div>
     </div>

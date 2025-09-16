@@ -9,5 +9,4 @@ public class SelloutApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(SelloutApplication.class, args);
 	}
-
 }

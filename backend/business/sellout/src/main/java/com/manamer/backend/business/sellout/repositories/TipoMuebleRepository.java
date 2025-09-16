@@ -12,5 +12,4 @@ public interface TipoMuebleRepository extends JpaRepository<TipoMueble, Long> {
 
     List<TipoMueble> findAllById(Iterable<Long> ids);
 
-    
 }

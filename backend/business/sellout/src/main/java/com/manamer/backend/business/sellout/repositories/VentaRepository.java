@@ -14,17 +14,14 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface VentaRepository extends JpaRepository<Venta, Long> {
 
-   // Consulta para obtener el Producto por cod_Barra (pueden existir varios productos con el mismo código de barras)
    @Query(value = "SELECT * FROM SAPHANA..CG3_360CORP.SAP_Prod sapProd WHERE sapProd.CodBarra = :codBarra", nativeQuery = true)
    List<Producto> obtenerProductoPorCodBarra(@Param("codBarra") String codBarra);
 
-   // Si solo se necesita un resultado, se toma el primero de la lista
    default Optional<Producto> obtenerPrimerProductoPorCodBarra(@Param("codBarra") String codBarra) {
        List<Producto> productos = obtenerProductoPorCodBarra(codBarra);
        return productos.isEmpty() ? Optional.empty() : Optional.of(productos.get(0));
    }
 
-   // Consulta para obtener el Producto (pueden existir varios con el mismo cod_Barra_Sap)
    @Query(value = "SELECT * FROM SELLOUT.dbo.producto mp WHERE mp.cod_barra_sap = :codBarra", nativeQuery = true)
    List<Producto> obtenerProducto(@Param("codBarra") String codBarra);
 
@@ -33,11 +30,9 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
        return productos.isEmpty() ? Optional.empty() : Optional.of(productos.get(0));
    }
 
-   // Consulta para obtener el Cliente (en este caso, se espera un solo resultado)
    @Query(value = "SELECT * FROM SELLOUT.dbo.cliente c WHERE c.id = :clienteId", nativeQuery = true)
    Optional<Cliente> obtenerCliente(@Param("clienteId") Long clienteId);
 
-   // Método alternativo para obtener solo un resultado en Producto con cod_Barra_Sap
    @Query("SELECT mp FROM Producto mp WHERE mp.codBarraSap = :codBarra")
    List<Producto> findProductoByCodBarra(@Param("codBarra") String codBarra);
 
@@ -46,25 +41,25 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
        return productos.isEmpty() ? Optional.empty() : Optional.of(productos.get(0));
    }
 
-   // Nueva consulta que valida y limpia el codBarra antes de la consulta
    default Optional<Producto> obtenerProductoPorCodBarraLimpio(@Param("codBarra") String codBarra) {
-       if (codBarra != null) {
-           codBarra = codBarra.trim();
-       }
-
-       if (codBarra == null || codBarra.isEmpty()) {
-           return Optional.empty();
-       }
-
+       if (codBarra != null) codBarra = codBarra.trim();
+       if (codBarra == null || codBarra.isEmpty()) return Optional.empty();
        return obtenerPrimerProductoPorCodBarra(codBarra);
    }
-   
-    Optional<Venta> findByAnioAndMesAndCodBarraAndCodPdv(Integer anio, Integer mes, String codBarra, String codPdv);
 
+   Optional<Venta> findByAnioAndMesAndCodBarraAndCodPdv(Integer anio, Integer mes, String codBarra, String codPdv);
 
-    Optional<Venta> findByClienteIdAndAnioAndMesAndDiaAndCodBarraAndCodPdv(
-        Long clienteId, Integer anio, Integer mes, Integer dia, String codBarra, String codPdv
-    );
+   Optional<Venta> findByClienteIdAndAnioAndMesAndDiaAndCodBarraAndCodPdv(
+       Long clienteId, Integer anio, Integer mes, Integer dia, String codBarra, String codPdv
+   );
 
+   // ===== OPCIONAL: validación directa de existencia en SAP por codBarra =====
+   @Query(value = "SELECT TOP 1 1 FROM SAPHANA..CG3_360CORP.SAP_Prod WHERE CodBarra = :codBarra", nativeQuery = true)
+   Integer existsSapByCodBarra(@Param("codBarra") String codBarra);
 
+   default boolean codBarraExisteEnSap(String codBarra) {
+       if (codBarra == null) return false;
+       Integer r = existsSapByCodBarra(codBarra.trim());
+       return r != null;
+   }
 }

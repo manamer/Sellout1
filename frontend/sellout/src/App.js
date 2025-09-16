@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
-import { FaSignOutAlt, FaMedkit, FaShoppingBag } from 'react-icons/fa';
+import { FaSignOutAlt, FaMedkit, FaShoppingBag, FaFileExcel, FaUsers } from 'react-icons/fa'; // 👈 FaUsers para Clientes
 import Login from './login';
 import Registrar from './Registrar';
 import OlvidarContraseña from './OlvidarContraseña';
@@ -10,8 +10,11 @@ import FybecaTemplate from './FybecaTemplate';
 import FybecaTipoMueble from './FybecaTipoMueble';
 import DepratiTipoMueble from './DepratiTipoMueble';
 import DepratiTemplate from './DepratiTemplate';
+import TemplateGeneral from './TemplateGeneral';
+import Cliente from './Cliente'; // 👈 NUEVO
+
 import './App.css';
-import './css/menu-dashboard.css'; // Importamos el nuevo archivo CSS específico
+import './css/menu-dashboard.css';
 import "primereact/resources/themes/lara-light-indigo/theme.css";
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
@@ -39,9 +42,7 @@ const App = () => {
     }
   }, []);
 
-  const handleLogin = (userData) => {
-    setUser(userData);
-  };
+  const handleLogin = (userData) => setUser(userData);
 
   const handleLogout = () => {
     setUser(null);
@@ -62,7 +63,7 @@ const App = () => {
     return JSON.parse(jsonPayload);
   };
 
-  // Definición de las empresas y sus módulos
+  // Empresas y módulos
   const companies = [
     {
       id: 'fybeca',
@@ -82,38 +83,56 @@ const App = () => {
       color: '#e11d48',
       modules: [
         { id: 'DepratiTemplate', name: 'Ventas', description: 'Gestión de ventas y transacciones' },
-        { id: 'DepratiTipoMueble', name: 'Tipo Mueble', description: 'Configuración de tipos de muebles' } // Añadido DepratiTipoMueble
+        { id: 'DepratiTipoMueble', name: 'Tipo Mueble', description: 'Configuración de tipos de muebles' }
+      ]
+    },
+    {
+      id: 'template-general',
+      name: 'Template General',
+      icon: <FaFileExcel size={32} />,
+      color: '#16a34a',
+      modules: [
+        { id: 'TemplateGeneral', name: 'Template General', description: 'Carga por plantilla fija' }
+      ]
+    },
+    {
+      id: 'clientes',
+      name: 'Clientes',
+      icon: <FaUsers size={32} />,
+      color: '#0284c7',
+      modules: [
+        { id: 'Cliente', name: 'Clientes', description: 'Gestión de clientes' }
       ]
     }
   ];
 
-  const renderCompanySelection = () => {
-    return (
-      <div className="menu-company-selection">
-        <h2 className="menu-selection-title">Seleccione una empresa</h2>
-        <div className="menu-company-grid">
-          {companies.map((company) => (
-            <div 
-              key={company.id} 
-              className="menu-company-card"
-              style={{ borderColor: company.color }}
-              onClick={() => setSelectedCompany(company)}
-            >
-              <div className="menu-company-icon" style={{ backgroundColor: `${company.color}20`, color: company.color }}>
-                {company.icon}
-              </div>
-              <h3 className="menu-company-name">{company.name}</h3>
-              <p className="menu-company-description">{company.modules.length} módulo{company.modules.length !== 1 ? 's' : ''} disponible{company.modules.length !== 1 ? 's' : ''}</p>
+  const renderCompanySelection = () => (
+    <div className="menu-company-selection">
+      <h2 className="menu-selection-title">Seleccione una empresa</h2>
+      <div className="menu-company-grid">
+        {companies.map((company) => (
+          <div
+            key={company.id}
+            className="menu-company-card"
+            style={{ borderColor: company.color }}
+            onClick={() => setSelectedCompany(company)}
+          >
+            <div className="menu-company-icon" style={{ backgroundColor: `${company.color}20`, color: company.color }}>
+              {company.icon}
             </div>
-          ))}
-        </div>
+            <h3 className="menu-company-name">{company.name}</h3>
+            <p className="menu-company-description">
+              {company.modules.length} módulo{company.modules.length !== 1 ? 's' : ''} disponible{company.modules.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+        ))}
       </div>
-    );
-  };
+    </div>
+  );
 
   const renderModuleSelection = () => {
     if (!selectedCompany) return null;
-    
+
     return (
       <div className="menu-module-selection">
         <div className="menu-selection-header">
@@ -122,11 +141,11 @@ const App = () => {
           </button>
           <h2 className="menu-selection-title">Módulos de {selectedCompany.name}</h2>
         </div>
-        
+
         <div className="menu-module-grid">
           {selectedCompany.modules.map((module) => (
-            <div 
-              key={module.id} 
+            <div
+              key={module.id}
               className={`menu-module-card ${activeTab === module.id ? 'active' : ''}`}
               style={{ borderColor: selectedCompany.color }}
               onClick={() => setActiveTab(module.id)}
@@ -168,24 +187,28 @@ const App = () => {
               !activeTab ? (
                 selectedCompany ? renderModuleSelection() : renderCompanySelection()
               ) : (
-                // Eliminado el div con className="menu-module-container"
                 <>
                   <div className="menu-module-header">
-                    <button className="menu-back-button" onClick={() => {
-                      setActiveTab('');
-                    }}>
+                    <button
+                      className="menu-back-button"
+                      onClick={() => {
+                        setActiveTab('');
+                      }}
+                    >
                       ← Volver a módulos
                     </button>
                     <h2 className="menu-module-title">
-                      {selectedCompany?.name} - {selectedCompany?.modules.find(m => m.id === activeTab)?.name}
+                      {selectedCompany?.name} - {selectedCompany?.modules.find((m) => m.id === activeTab)?.name}
                     </h2>
                   </div>
-                  {/* Eliminado el div con className="tab-content" */}
+
                   {activeTab === 'FybecaTemplate' && <FybecaTemplate />}
+                  {activeTab === 'TemplateGeneral' && <TemplateGeneral />}
                   {activeTab === 'FybecaMantenimientoProducto' && <FybecaMantenimientoProducto />}
                   {activeTab === 'FybecaTipoMueble' && <FybecaTipoMueble />}
                   {activeTab === 'DepratiTemplate' && <DepratiTemplate />}
                   {activeTab === 'DepratiTipoMueble' && <DepratiTipoMueble />}
+                  {activeTab === 'Cliente' && <Cliente />}{/* 👈 Render nuevo */}
                 </>
               )
             ) : (
@@ -198,12 +221,10 @@ const App = () => {
   );
 };
 
-const AppWrapper = () => {
-  return (
-    <Router>
-      <App />
-    </Router>
-  );
-};
+const AppWrapper = () => (
+  <Router>
+    <App />
+  </Router>
+);
 
 export default AppWrapper;
