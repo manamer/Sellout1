@@ -20,7 +20,7 @@ const FybecaProducto = () => {
     setError(null);
     try {
       const queryParams = new URLSearchParams(filtros).toString();
-      const response = await fetch(`/api/fybeca/reportes-productos?${queryParams}`);
+      const response = await fetch(`/api-sellout/fybeca/reportes-productos?${queryParams}`);
       if (!response.ok) {
         throw new Error(`Error al cargar productos: ${response.statusText}`);
       }
@@ -64,7 +64,7 @@ const FybecaProducto = () => {
     e.preventDefault();
     setLoading(true); // Activa el spinner mientras se actualiza el producto
     try {
-      const response = await fetch(`/api/fybeca/productos/${productoEditar.id}`, {
+      const response = await fetch(`/api-sellout/fybeca/productos/${productoEditar.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -94,7 +94,7 @@ const FybecaProducto = () => {
     if (window.confirm("¿Seguro que deseas eliminar este producto?")) {
       setLoading(true); // Activa el spinner antes de eliminar
       try {
-        const response = await fetch(`/api/fybeca/productos/${id}`, {
+        const response = await fetch(`/api-sellout/fybeca/productos/${id}`, {
           method: "DELETE",
         });
         if (!response.ok) {

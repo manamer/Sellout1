@@ -62,7 +62,7 @@ const RestablecerContrasenia = () => {
     formData.append('confirmPassword', confirmPassword);
 
     try {
-      const response = await fetch('/api/security/resetPassword', {
+      const response = await fetch('/api-keycloak/security/resetPassword', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',

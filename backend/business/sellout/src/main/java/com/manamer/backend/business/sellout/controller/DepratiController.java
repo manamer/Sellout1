@@ -26,7 +26,7 @@ import java.util.*;
         allowedHeaders = "*",
         methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE}
 )
-@RequestMapping("/api/deprati")
+@RequestMapping("/api-sellout/deprati")
 public class DepratiController {
 
     private static final Logger logger = LoggerFactory.getLogger(DepratiController.class);

@@ -26,7 +26,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
 @RestController
-@RequestMapping("/api/security")
+@RequestMapping("/api-keycloak/security")
 public class IndexController {
 
     private Logger logger = LoggerFactory.getLogger(IndexController.class);

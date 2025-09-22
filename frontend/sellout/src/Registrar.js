@@ -87,7 +87,7 @@ const Registro = () => {
       confirmPassword,
     };
 
-    fetch('/api/security/register', {
+    fetch('/api-keycloak/security/register', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
