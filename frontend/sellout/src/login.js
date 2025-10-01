@@ -30,7 +30,7 @@ const Login = ({ onLogin }) => {
 
     try {
       // SOLO endpoint nuevo (JSON)
-      const response = await fetch('/api/security/loginPrueba', {
+      const response = await fetch('/api-keycloak/security/loginPrueba', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),

@@ -22,7 +22,7 @@ import "primeicons/primeicons.css";
 import "primeflex/primeflex.css";
 
 // ================= API base y helper fetch =================
-const API_BASE = "/api/template-general";
+const API_BASE = "/api-sellout/template-general";
 
 const getFilenameFromCD = (cd) => {
   if (!cd) return null;

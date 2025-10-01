@@ -98,7 +98,7 @@ const FybecaTipoMueble = () => {
     setLoading(true);
     setError("");
     try {
-      const resp = await fetch(`/api/fybeca/tipo-mueble?codCliente=${encodeURIComponent(COD_CLIENTE_FIJO)}`);
+      const resp = await fetch(`/api-sellout/fybeca/tipo-mueble?codCliente=${encodeURIComponent(COD_CLIENTE_FIJO)}`);
       if (!resp.ok) throw new Error(`Error al cargar tipos de mueble`);
       const data = await resp.json();
       setTipoMuebles(Array.isArray(data) ? data : []);
@@ -171,7 +171,7 @@ const FybecaTipoMueble = () => {
     setLoading(true);
     try {
       tm.cliente = { ...(tm.cliente || {}), codCliente: COD_CLIENTE_FIJO };
-      const resp = await fetch("/api/fybeca/tipo-mueble", {
+      const resp = await fetch("/api-sellout/fybeca/tipo-mueble", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(tm),
@@ -192,7 +192,7 @@ const FybecaTipoMueble = () => {
     setLoading(true);
     try {
       tm.cliente = { ...(tm.cliente || {}), codCliente: COD_CLIENTE_FIJO };
-      const resp = await fetch(`/api/fybeca/tipo-mueble/${tm.id}`, {
+      const resp = await fetch(`/api-sellout/fybeca/tipo-mueble/${tm.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(tm),
@@ -221,7 +221,7 @@ const FybecaTipoMueble = () => {
       accept: async () => {
         setLoading(true);
         try {
-          const resp = await fetch(`/api/fybeca/tipo-mueble/${id}`, { method: "DELETE" });
+          const resp = await fetch(`/api-sellout/fybeca/tipo-mueble/${id}`, { method: "DELETE" });
           if (!resp.ok) {
             const parsed = await parseDeleteResponse(resp);
             showDeletionOutcome(parsed, showSuccess, showWarn, showInfo);
@@ -265,7 +265,7 @@ const FybecaTipoMueble = () => {
 
           for (let i = 0; i < selectedIds.length; i += batchSize) {
             const batch = selectedIds.slice(i, i + batchSize);
-            const resp = await fetch("/api/fybeca/eliminar-varios-tipo-mueble", {
+            const resp = await fetch("/api-sellout/fybeca/eliminar-varios-tipo-mueble", {
               method: "DELETE",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(batch),
@@ -313,7 +313,7 @@ const FybecaTipoMueble = () => {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const resp = await fetch("/api/fybeca/template-tipo-muebles", { method: "POST", body: fd });
+      const resp = await fetch("/api-sellout/fybeca/template-tipo-muebles", { method: "POST", body: fd });
       if (!resp.ok) throw new Error("Error al subir archivo");
       const msg = await resp.text();
       showSuccess(msg || "Archivo subido correctamente");
@@ -329,7 +329,7 @@ const FybecaTipoMueble = () => {
   // ====== descargar reporte ======
   const descargarReporte = async () => {
     try {
-      const resp = await fetch("/api/fybeca/reporte-tipo-mueble", { method: "GET" });
+      const resp = await fetch("/api-sellout/fybeca/reporte-tipo-mueble", { method: "GET" });
       if (!resp.ok) throw new Error("Error al descargar reporte");
       const cd = resp.headers.get("Content-Disposition");
       const filename = cd ? cd.split("filename=")[1]?.replace(/"/g, "") : "reporte_tipo_mueble.xlsx";

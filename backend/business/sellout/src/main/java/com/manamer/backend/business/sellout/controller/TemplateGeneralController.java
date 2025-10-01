@@ -24,7 +24,7 @@ import java.util.*;
 
 @RestController
 @CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE})
-@RequestMapping("/api/template-general")
+@RequestMapping("/api-sellout/template-general")
 public class TemplateGeneralController {
 
     private static final Logger logger = LoggerFactory.getLogger(TemplateGeneralController.class);

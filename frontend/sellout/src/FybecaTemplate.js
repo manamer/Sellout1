@@ -22,7 +22,7 @@ import { Divider } from "primereact/divider";
 import { ConfirmDialog, confirmDialog } from "primereact/confirmdialog";
 
 // ================= API base y helper fetch =================
-const API_BASE = "/api/fybeca";
+const API_BASE = "/api-sellout/fybeca";
 
 const getFilenameFromCD = (cd) => {
   if (!cd) return null;

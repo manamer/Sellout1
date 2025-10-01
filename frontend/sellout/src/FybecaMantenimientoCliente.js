@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import "./css/deprati.css";
 import "./css/fybeca-deprati-compatibility.css";
-const API_URL = "/api/fybeca/cliente";
+const API_URL = "/api-sellout/fybeca/cliente";
 
 const FybecaMantenimientoCliente = () => {
   const [clientes, setClientes] = useState([]);

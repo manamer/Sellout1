@@ -34,7 +34,7 @@ const OlvidarContraseña = () => {
     setProcessing(true);
 
     try {
-      const response = await fetch('/api/security/forgotPassword', {
+      const response = await fetch('/api-keycloak/security/forgotPassword', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

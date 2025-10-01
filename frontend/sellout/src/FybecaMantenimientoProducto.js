@@ -110,7 +110,7 @@ const FybecaMantenimientoProducto = () => {
     setLoading(true);
     setError(null);
     try {
-      const resp = await fetch("/api/fybeca/productos");
+      const resp = await fetch("/api-sellout/fybeca/productos");
       if (!resp.ok) throw new Error("Error al obtener los productos");
       const data = await resp.json();
       setProductos(data);
@@ -135,7 +135,7 @@ const FybecaMantenimientoProducto = () => {
 
   const onSaveProducto = async () => {
     try {
-      const resp = await fetch("/api/fybeca/producto", {
+      const resp = await fetch("/api-sellout/fybeca/producto", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editProducto),
@@ -161,7 +161,7 @@ const FybecaMantenimientoProducto = () => {
       acceptClassName: "p-button-danger",
       accept: async () => {
         try {
-          const resp = await fetch("/api/fybeca/productos", {
+          const resp = await fetch("/api-sellout/fybeca/productos", {
             method: "DELETE",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify([id]),
@@ -207,7 +207,7 @@ const FybecaMantenimientoProducto = () => {
 
           for (let i = 0; i < ids.length; i += batchSize) {
             const batch = ids.slice(i, i + batchSize);
-            const resp = await fetch("/api/fybeca/productos", {
+            const resp = await fetch("/api-sellout/fybeca/productos", {
               method: "DELETE",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(batch),
@@ -302,7 +302,7 @@ const FybecaMantenimientoProducto = () => {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const resp = await fetch("/api/fybeca/template-productos", { method: "POST", body: formData });
+      const resp = await fetch("/api-sellout/fybeca/template-productos", { method: "POST", body: formData });
       if (!resp.ok) throw new Error("Error al cargar el archivo");
       const msg = await resp.text();
       showSuccess(msg || "Archivo procesado");
@@ -317,7 +317,7 @@ const FybecaMantenimientoProducto = () => {
 
   const onGenerateReport = async () => {
     try {
-      const response = await fetch("/api/fybeca/reporte-productos", { method: "GET" });
+      const response = await fetch("/api-sellout/fybeca/reporte-productos", { method: "GET" });
       if (!response.ok) throw new Error("Error al generar el reporte");
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);

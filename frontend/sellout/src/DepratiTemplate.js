@@ -123,7 +123,7 @@ const Deprati = () => {
   // ==== Carga de datos ====
   const loadMarcas = async () => {
     try {
-      const res = await fetch("/api/fybeca/marcas-ventas");
+      const res = await fetch("/api-sellout/fybeca/marcas-ventas");
       if (!res.ok) throw new Error("Error al cargar marcas");
       const data = await res.json();
       setMarcas(Array.isArray(data) ? data : []);
@@ -133,7 +133,7 @@ const Deprati = () => {
   const loadVentas = async () => {
     setLoadingVentas(true);
     try {
-      const res = await fetch("/api/deprati/venta");
+      const res = await fetch("/api-sellout/deprati/venta");
       if (!res.ok) throw new Error("Error al cargar ventas");
       const data = await res.json();
       const processed = (Array.isArray(data) ? data : []).map(v => (v?.cliente?.ciudad ? { ...v, ciudad: v.cliente.ciudad } : v));
@@ -354,7 +354,7 @@ const Deprati = () => {
     const wallStart = Date.now();
 
     try {
-      const response = await fetch("/api/deprati/subir-archivos-motor-maping", {
+      const response = await fetch("/api-sellout/deprati/subir-archivos-motor-maping", {
         method: "POST",
         body: formData,
         signal: AbortSignal.timeout(1800000) // 30min
@@ -483,7 +483,7 @@ const Deprati = () => {
   const executeDeleteSelected = async () => {
     const ids = selectedVentas.map(v => v.id);
     try {
-      const res = await fetch("/api/deprati/ventas-forma-masiva", {
+      const res = await fetch("/api-sellout/deprati/ventas-forma-masiva", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(ids)
@@ -528,7 +528,7 @@ const Deprati = () => {
       closable: false,
       accept: async () => {
         try {
-          const res = await fetch(`/api/deprati/venta/${id}`, { method: "DELETE" });
+          const res = await fetch(`/api-sellout/deprati/venta/${id}`, { method: "DELETE" });
           if (!res.ok) throw new Error("Error al eliminar la venta");
           showInfo("Venta eliminada exitosamente");
           loadVentas();
@@ -725,7 +725,7 @@ const Deprati = () => {
     }
     setIsSaving(true);
     try {
-      const res = await fetch(`/api/deprati/venta/${editVenta.id}`, {
+      const res = await fetch(`/api-sellout/deprati/venta/${editVenta.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editVenta)
