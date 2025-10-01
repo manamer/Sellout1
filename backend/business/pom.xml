@@ -13,8 +13,7 @@
     <packaging>pom</packaging>
 
     <modules>
-        <module>deprati</module>
-        <module>fybeca</module>
+        <module>sellout</module>
     </modules>
 
     <dependencies>

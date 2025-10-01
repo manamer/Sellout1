@@ -15,6 +15,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.MediaType;
+import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -99,10 +102,35 @@ public class DepratiController {
         return depratiVentaService.procesarArchivoExcelDeprati(file);
     }
 
-
+    // ---------- Tipo de Mueble ----------
     @GetMapping("/tipo-mueble")
     public ResponseEntity<List<TipoMueble>> obtenerTiposMuebleDeprati() {
         return ResponseEntity.ok(tipoMuebleService.obtenerTodosLosTiposMuebleDeprati());
+    }
+
+    @PostMapping(
+            value = "/tipo-mueble",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<?> crearTipoMueble(@RequestBody /*@Valid*/ TipoMueble tipoMueble,
+                                             UriComponentsBuilder uriBuilder) {
+        try {
+            // Usa el método existente en tu Service
+            TipoMueble creado = tipoMuebleService.guardarTipoMueble(tipoMueble);
+            return ResponseEntity.status(HttpStatus.CREATED).body(creado);
+
+        } catch (DataIntegrityViolationException ex) {
+            logger.warn("Conflicto al crear tipo de mueble: {}", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe un tipo de mueble con esos datos."));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+        } catch (Exception ex) {
+            logger.error("Error al crear tipo de mueble", ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "No se pudo crear el tipo de mueble."));
+        }
     }
 
     // ---------- Descargables ----------
